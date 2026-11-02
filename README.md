@@ -35,6 +35,19 @@ quality/daily.csv                         # 每日遺漏率
 - 到 GitHub repo 的 **Actions** 分頁，選 `collect` 或 `compact`，按 **Run workflow**。
 - `compact` 可以填日期（YYYY-MM-DD）重新整併某一天，重跑結果相同。
 
+### 本機備援收集（Windows）
+
+GitHub 排程不穩時，可以讓自己的電腦每 10 分鐘收集一次，並推到同一個 `data` 分支。兩邊同時跑也沒關係，整併時同一個 10 分鐘格點只會留一筆。
+
+```powershell
+git worktree add data/datarepo data                                   # 只需做一次
+powershell -ExecutionPolicy Bypass -File scripts\register_local_task.ps1
+```
+
+- 執行紀錄在 `data/collect_local.log`（只記失敗和每次寫入的快照）。
+- 電腦關機或睡眠時不會收集，醒來後會補跑一次。
+- 停用：`Unregister-ScheduledTask -TaskName YouBikeCollect -Confirm:$false`
+
 本機執行：
 
 ```bash
