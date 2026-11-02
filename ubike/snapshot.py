@@ -28,37 +28,36 @@ def to_taipei(dt: datetime) -> datetime:
     return dt.astimezone(TAIPEI)
 
 
+def _num(value, cast):
+    """轉成數字；None、空字串、亂碼回傳 None，讓呼叫端略過該站而不是整輪失敗。"""
+    try:
+        return cast(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def slim_rows(stations: list[dict], collect_time: datetime) -> list[dict]:
     stamp = to_taipei(collect_time).strftime(TIME_FMT)
     rows = []
     for s in stations:
         sno = str(s.get("sno") or "").strip()
-        if not sno:
-            continue
-        rows.append({
-            "collect_time": stamp,
-            "sno": sno,
-            "available_rent_bikes": int(s["available_rent_bikes"]),
-            "available_return_bikes": int(s["available_return_bikes"]),
-            "act": int(s["act"]),
-            "mday": s.get("mday", ""),
-        })
+        nums = {k: _num(s.get(k), int) for k in ("available_rent_bikes", "available_return_bikes", "act")}
+        if not sno or None in nums.values():
+            continue  # 單站壞資料只丟那一站
+        rows.append({"collect_time": stamp, "sno": sno, **nums, "mday": s.get("mday", "")})
     return rows
 
 
 def station_rows(stations: list[dict]) -> list[dict]:
-    rows = [
-        {
-            "sno": str(s["sno"]),
-            "sna": s["sna"],
-            "sarea": s["sarea"],
-            "latitude": float(s["latitude"]),
-            "longitude": float(s["longitude"]),
-            "Quantity": int(s["Quantity"]),
-        }
-        for s in stations
-        if str(s.get("sno") or "").strip()
-    ]
+    rows = []
+    for s in stations:
+        sno = str(s.get("sno") or "").strip()
+        lat, lng = _num(s.get("latitude"), float), _num(s.get("longitude"), float)
+        qty = _num(s.get("Quantity"), int)
+        if not sno or None in (lat, lng, qty):
+            continue
+        rows.append({"sno": sno, "sna": s.get("sna", ""), "sarea": s.get("sarea", ""),
+                     "latitude": lat, "longitude": lng, "Quantity": qty})
     return sorted(rows, key=lambda r: r["sno"])
 
 

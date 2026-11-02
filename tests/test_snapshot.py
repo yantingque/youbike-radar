@@ -44,6 +44,19 @@ def test_slim_rows_skips_station_without_sno():
     assert len(rows) == 1
 
 
+def test_slim_rows_skips_station_with_unparseable_numbers():
+    no_act = {k: v for k, v in station().items() if k != "act"}
+    bad = [station(sno="2", available_rent_bikes=None), no_act,
+           station(sno="3", available_return_bikes="")]
+    rows = slim_rows([station()] + bad, UTC_0735)
+    assert [r["sno"] for r in rows] == ["500101001"]
+
+
+def test_station_rows_skips_station_with_bad_coordinates():
+    rows = station_rows([station(), station(sno="2", latitude=None), station(sno="3", Quantity="")])
+    assert [r["sno"] for r in rows] == ["500101001"]
+
+
 def test_to_taipei_rejects_naive_datetime():
     with pytest.raises(ValueError):
         to_taipei(datetime(2026, 11, 2, 15, 35))

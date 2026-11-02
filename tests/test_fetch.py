@@ -40,6 +40,13 @@ def test_fetch_retries_then_succeeds():
     assert len(got) == 1823 and opener.calls == 3
 
 
+def test_fetch_retries_incomplete_read():
+    import http.client
+    opener = FakeOpener(http.client.IncompleteRead(b"[{"), ok_payload())
+    got = fetch_stations(opener=opener, sleep=lambda s: None)
+    assert len(got) == 1823 and opener.calls == 2
+
+
 def test_fetch_gives_up_after_three_attempts():
     opener = FakeOpener(TimeoutError(), ok_payload(10), b"[]", ok_payload())
     with pytest.raises(FetchError):

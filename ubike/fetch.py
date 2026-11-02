@@ -1,4 +1,5 @@
 """抓臺北 YouBike2.0 即時 API，檢查站數，失敗就重試。"""
+import http.client
 import json
 import time
 import urllib.request
@@ -33,6 +34,7 @@ def fetch_stations(
         try:
             with opener(url, timeout=timeout) as resp:
                 return validate_stations(json.load(resp))
-        except (OSError, ValueError, FetchError) as e:  # 網路錯誤／逾時、JSON 錯誤、站數不足
+        # 網路錯誤／逾時、傳輸中斷（IncompleteRead）、JSON 錯誤、站數不足
+        except (OSError, http.client.HTTPException, ValueError, FetchError) as e:
             last_error = e
     raise FetchError(f"嘗試 {retries + 1} 次都失敗：{last_error}") from last_error

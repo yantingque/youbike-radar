@@ -1,9 +1,10 @@
 name: compact
 
-# 每天臺北 00:30（UTC 16:30）把昨天的快照整併成 parquet，並更新遺漏率報表
+# 每天臺北 00:35（UTC 16:35）把昨天（以及之前錯過）的快照整併成 parquet，並更新遺漏率報表
+# 刻意避開 */10 的收集時間，降低被 concurrency 群組中待執行的 run 取代的機會
 on:
   schedule:
-    - cron: "30 16 * * *"
+    - cron: "35 16 * * *"
   workflow_dispatch:
     inputs:
       date:

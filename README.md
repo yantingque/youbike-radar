@@ -12,7 +12,7 @@
 | Workflow | 排程 | 做什麼 |
 |---|---|---|
 | `collect` | 每 10 分鐘 | 抓即時 API，存一份精簡快照到 `data` 分支 |
-| `compact` | 每天臺北 00:30 | 把昨天的快照整併成一個 parquet，更新遺漏率報表 |
+| `compact` | 每天臺北 00:35 | 把昨天（以及之前錯過）的快照整併成 parquet，更新遺漏率報表 |
 | `tests` | push 到 main | 跑 pytest |
 
 ### `data` 分支結構
@@ -24,7 +24,7 @@ snapshots/YYYY-MM-DD.parquet              # 每日整併結果（每站每 10 �
 quality/daily.csv                         # 每日遺漏率
 ```
 
-快照欄位：`collect_time`（臺北時間）、`sno`、`available_rent_bikes`、`available_return_bikes`、`act`、`mday`，parquet 另有 `slot`（對齊到 10 分鐘格點）。
+快照欄位：`collect_time`（臺北時間）、`sno`、`available_rent_bikes`、`available_return_bikes`、`act`、`mday`，parquet 另有 `slot`（對齊到 10 分鐘格點）與 `mday_ts`（`mday` 解析成時間；格式不符時為空，原始字串仍保留在 `mday`）。單站欄位缺值或無法轉成數字時，只略過那一站。
 
 ### 看收集品質
 

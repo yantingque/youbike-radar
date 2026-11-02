@@ -2,17 +2,23 @@ from datetime import date, datetime
 
 import polars as pl
 
-from ubike.compact import compact_day, slot_of, upsert_quality
+from ubike.compact import compact_day, pending_days, slot_of, upsert_quality
 from ubike.snapshot import write_raw
 
 DAY = date(2026, 11, 2)
 
 
-def put(root, hhmmss, snos=("A", "B")):
-    t = f"2026-11-02 {hhmmss[:2]}:{hhmmss[2:4]}:{hhmmss[4:]}"
+def put(root, hhmmss, snos=("A", "B"), day="2026-11-02"):
+    t = f"{day} {hhmmss[:2]}:{hhmmss[2:4]}:{hhmmss[4:]}"
     rows = [{"collect_time": t, "sno": s, "available_rent_bikes": 3,
              "available_return_bikes": 9, "act": 1, "mday": "壞掉的時間"} for s in snos]
-    write_raw(rows, root / "snapshots/raw/2026-11-02" / f"{hhmmss}.csv.gz")
+    write_raw(rows, root / "snapshots/raw" / day / f"{hhmmss}.csv.gz")
+
+
+def test_pending_days_lists_every_raw_day_before_today(tmp_path):
+    for d in ("2026-10-31", "2026-11-02", "2026-11-03"):
+        put(tmp_path, "120000", day=d)
+    assert pending_days(tmp_path, today=date(2026, 11, 3)) == [date(2026, 10, 31), date(2026, 11, 2)]
 
 
 def test_slot_of_floors_to_ten_minutes():
@@ -28,7 +34,8 @@ def test_two_runs_in_same_slot_count_once(tmp_path):
     assert df.height == 4  # 2 格點 × 2 站
     first_slot = df.filter(pl.col("slot") == datetime(2026, 11, 2, 15, 30))
     assert first_slot["collect_time"].min() == datetime(2026, 11, 2, 15, 30, 5)
-    assert df["mday"].null_count() == 4
+    assert df["mday"].to_list() == ["壞掉的時間"] * 4  # 原始字串保留，raw 刪了也不會遺失
+    assert df["mday_ts"].null_count() == 4
 
 
 def test_raw_folder_removed_after_compaction(tmp_path):

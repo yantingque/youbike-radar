@@ -35,10 +35,21 @@ def slot_of(ts: datetime) -> datetime:
 def _read_raw(path: Path) -> pl.DataFrame:
     with gzip.open(path, "rb") as f:
         df = pl.read_csv(f.read(), schema_overrides=RAW_SCHEMA)
-    return df.with_columns(
-        pl.col("collect_time").str.to_datetime(TIME_FMT),
-        pl.col("mday").str.to_datetime(TIME_FMT, strict=False),  # 解析失敗給 null
-    )
+    return df.with_columns(pl.col("collect_time").str.to_datetime(TIME_FMT))
+
+
+def pending_days(root: Path, today: date) -> list[date]:
+    """所有早於今天、還留著 raw 資料夾的日子（錯過的整併會在下次自動補做）。"""
+    raw_root = root / "snapshots" / "raw"
+    days = []
+    for p in raw_root.glob("*"):
+        try:
+            d = date.fromisoformat(p.name)
+        except ValueError:
+            continue
+        if p.is_dir() and d < today:
+            days.append(d)
+    return sorted(days)
 
 
 def compact_day(root: Path, day: date) -> dict:
@@ -48,7 +59,7 @@ def compact_day(root: Path, day: date) -> dict:
 
     frames = [_read_raw(p) for p in sorted(raw_dir.glob("*.csv.gz"))]
     if out_path.exists():
-        frames.append(pl.read_parquet(out_path).drop("slot"))
+        frames.append(pl.read_parquet(out_path).drop("slot", "mday_ts"))
 
     if not frames:
         return {"date": day_str, "received_slots": 0, "expected_slots": EXPECTED_SLOTS,
@@ -56,7 +67,11 @@ def compact_day(root: Path, day: date) -> dict:
 
     df = (
         pl.concat(frames)
-        .with_columns(pl.col("collect_time").dt.truncate("10m").alias("slot"))
+        .with_columns(
+            pl.col("collect_time").dt.truncate("10m").alias("slot"),
+            # mday 保留原始字串（raw 會被刪），另存解析結果；格式變了只會讓 mday_ts 變 null
+            pl.col("mday").str.to_datetime(TIME_FMT, strict=False).alias("mday_ts"),
+        )
         .sort("collect_time")
         .unique(subset=["slot", "sno"], keep="first", maintain_order=True)
         .sort(["slot", "sno"])
@@ -93,13 +108,20 @@ def upsert_quality(path: Path, row: dict) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="整併某一天的快照並記錄遺漏率")
     parser.add_argument("--out", required=True, type=Path, help="資料夾（data 分支）")
-    parser.add_argument("--date", type=date.fromisoformat, help="YYYY-MM-DD，預設臺北時間昨天")
+    parser.add_argument("--date", type=date.fromisoformat,
+                        help="YYYY-MM-DD；不給時整併昨天，以及所有早於今天還沒整併的日子（臺北時間）")
     args = parser.parse_args(argv)
 
-    day = args.date or (datetime.now(TAIPEI).date() - timedelta(days=1))
-    row = compact_day(args.out, day)
-    upsert_quality(args.out / "quality" / "daily.csv", row)
-    print(row)
+    if args.date:
+        days = [args.date]
+    else:
+        today = datetime.now(TAIPEI).date()
+        # 昨天一定要有一列報表（沒收到資料就記遺漏率 1.0），再補上之前錯過的日子
+        days = sorted(set(pending_days(args.out, today)) | {today - timedelta(days=1)})
+    for day in days:
+        row = compact_day(args.out, day)
+        upsert_quality(args.out / "quality" / "daily.csv", row)
+        print(row)
     return 0
 
 
