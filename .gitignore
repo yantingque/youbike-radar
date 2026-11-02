@@ -1,0 +1,7 @@
+data/
+out/
+__pycache__/
+.venv/
+.pytest_cache/
+.superpowers/
+*.docx
