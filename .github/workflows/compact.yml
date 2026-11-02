@@ -1,0 +1,63 @@
+name: compact
+
+# 每天臺北 00:30（UTC 16:30）把昨天的快照整併成 parquet，並更新遺漏率報表
+on:
+  schedule:
+    - cron: "30 16 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "要整併的日期 YYYY-MM-DD（空白＝臺北時間昨天）"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: data-branch
+  cancel-in-progress: false
+
+jobs:
+  compact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout data 分支
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: datarepo
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 整併
+        env:
+          DATE: ${{ inputs.date }}
+        run: python -m ubike.compact --out datarepo ${DATE:+--date "$DATE"}
+
+      - name: Commit 並 push 到 data 分支
+        working-directory: datarepo
+        env:
+          DATE: ${{ inputs.date }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "沒有變更"; exit 0; fi
+          git commit -q -m "data: 整併 ${DATE:-$(TZ=Asia/Taipei date -d yesterday +%F)}"
+          for i in 1 2 3; do
+            git pull --rebase -q origin data && git push -q origin HEAD:data && exit 0
+            echo "push 失敗，第 $i 次重試"
+            sleep 5
+          done
+          exit 1
