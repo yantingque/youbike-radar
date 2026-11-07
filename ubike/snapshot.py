@@ -76,7 +76,8 @@ def write_raw(rows: list[dict], path: Path) -> None:
 
 def write_stations(rows: list[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as f:
+    # utf-8-sig 會在開頭加 BOM，Excel 直接雙擊打開中文才不會亂碼
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=STATION_FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)

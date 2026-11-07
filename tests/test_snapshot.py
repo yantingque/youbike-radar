@@ -11,6 +11,7 @@ from ubike.snapshot import (
     station_rows,
     to_taipei,
     write_raw,
+    write_stations,
 )
 
 UTC_0735 = datetime(2026, 11, 2, 7, 35, 12, tzinfo=timezone.utc)  # = 臺北 15:35:12
@@ -79,3 +80,13 @@ def test_write_raw_roundtrip(tmp_path):
     with gzip.open(path, "rt", encoding="utf-8") as f:
         got = list(csv.DictReader(f))
     assert got[0]["sno"] == "500101001" and got[0]["available_rent_bikes"] == "13"
+
+
+def test_write_stations_has_utf8_bom_so_excel_shows_chinese(tmp_path):
+    path = tmp_path / "stations.csv"
+    write_stations(station_rows([station(sno="500101001", sna="YouBike2.0_捷運科技大樓站")]), path)
+    assert path.read_bytes().startswith(b"\xef\xbb\xbf")
+    with path.open(encoding="utf-8-sig", newline="") as f:
+        row = next(csv.DictReader(f))
+    assert row["sno"] == "500101001"
+    assert row["sna"] == "YouBike2.0_捷運科技大樓站"
